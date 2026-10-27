@@ -1,0 +1,688 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex"><meta name="theme-color" content="#0b6e75"><style>html{color-scheme:light}body{margin:0;font:14px system-ui}[hidden]{display:none!important}</style><title>Turnos Balística</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+/* Concepto: tablero de laboratorio. Rejilla tipo planilla (como el Excel original), chips de turno por color, huecos de cobertura en rojo con panel de sugerencias al lado. */
+:root{
+  --bg:#f3f5f6; --panel:#ffffff; --ink:#14232b; --muted:#5d6f78; --line:#d9e0e3; --line2:#e9eef0;
+  --accent:#0b6e75; --accent-ink:#ffffff; --accent-soft:#dff0f1;
+  --M:#fbe7b5; --Mi:#6b4a00; --T:#cfe6fb; --Ti:#0d3f6e; --N:#d9d4f7; --Ni:#2e2380;
+  --S:#dcebdd; --Si:#24562b; --F:#eceff1; --Fi:#6a7a82; --A:#f8d3d6; --Ai:#7d1822;
+  --bad:#c0262f; --bad-soft:#fde4e5; --ok:#1c7a43; --warn:#a15c00;
+  --teamA:#0b6e75; --teamB:#7a4fb0;
+  --sans:'IBM Plex Sans',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1a1f; --panel:#16252c; --ink:#e4edf0; --muted:#93a8b1; --line:#2a3d46; --line2:#203038;
+  --accent:#4cc3cb; --accent-ink:#06262a; --accent-soft:#123a40;
+  --M:#5a4310; --Mi:#ffe6a6; --T:#173f66; --Ti:#bfe0ff; --N:#322c6e; --Ni:#d8d3ff;
+  --S:#1f4026; --Si:#bfe8c6; --F:#1e2d34; --Fi:#8ba0a9; --A:#5a1f26; --Ai:#ffc9ce;
+  --bad:#ff7a82; --bad-soft:#41191e; --ok:#6fd49a; --warn:#f0b35a;
+  --teamA:#4cc3cb; --teamB:#b896ec; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1a1f; --panel:#16252c; --ink:#e4edf0; --muted:#93a8b1; --line:#2a3d46; --line2:#203038;
+  --accent:#4cc3cb; --accent-ink:#06262a; --accent-soft:#123a40;
+  --M:#5a4310; --Mi:#ffe6a6; --T:#173f66; --Ti:#bfe0ff; --N:#322c6e; --Ni:#d8d3ff;
+  --S:#1f4026; --Si:#bfe8c6; --F:#1e2d34; --Fi:#8ba0a9; --A:#5a1f26; --Ai:#ffc9ce;
+  --bad:#ff7a82; --bad-soft:#41191e; --ok:#6fd49a; --warn:#f0b35a;
+  --teamA:#4cc3cb; --teamB:#b896ec; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 var(--sans);padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px));padding-block:16px 40px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+h1{font-size:22px;margin:0;letter-spacing:-.01em;text-wrap:balance}
+h2{font-size:15px;margin:0 0 8px}
+.sub{color:var(--muted);font-size:13px}
+.top{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-end;justify-content:space-between}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+.tab{background:none;border:0;border-bottom:2px solid transparent;padding:9px 12px;font:600 13px var(--sans);color:var(--muted);cursor:pointer;margin-bottom:-1px}
+.tab[aria-selected="true"]{color:var(--accent);border-color:var(--accent)}
+.tab .n{background:var(--bad);color:#fff;border-radius:9px;padding:0 6px;font-size:11px;margin-left:5px}
+button,select,input{font:inherit;color:inherit}
+.btn{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 11px;cursor:pointer;font-weight:500}
+.btn:hover{border-color:var(--accent)}
+.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.btn.sm{padding:3px 8px;font-size:12px}
+.btn:focus-visible,.tab:focus-visible,.cell:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+input,select{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sp{flex:1}
+.banner{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:10px 14px;border-radius:8px;background:var(--accent-soft);border:1px solid var(--line)}
+.banner.bad{background:var(--bad-soft)}
+.team{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;font:600 11px var(--mono);color:#fff}
+.team.A{background:var(--teamA);color:var(--accent-ink)}.team.B{background:var(--teamB);color:#fff}
+.grid-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+table.g{border-collapse:separate;border-spacing:0;width:100%;min-width:760px}
+table.g th,table.g td{padding:6px 5px;border-bottom:1px solid var(--line2);text-align:center;vertical-align:middle}
+table.g th{font-size:12px;font-weight:600;color:var(--muted);background:var(--panel)}
+table.g th.we,table.g td.we{background:color-mix(in srgb,var(--line2) 55%,transparent)}
+table.g th small{display:block;font:500 11px var(--mono);color:var(--muted)}
+table.g td.who{text-align:left;position:sticky;left:0;background:var(--panel);z-index:1;min-width:150px;border-right:1px solid var(--line)}
+table.g th.who{position:sticky;left:0;z-index:2;text-align:left;border-right:1px solid var(--line)}
+.who b{font-weight:600}.who .rk{color:var(--muted);font-size:12px}
+.cell{display:block;width:100%;min-width:74px;border:0;border-radius:5px;padding:6px 3px;font:500 12px var(--mono);cursor:pointer;position:relative}
+.cell.M{background:var(--M);color:var(--Mi)}.cell.T{background:var(--T);color:var(--Ti)}.cell.N{background:var(--N);color:var(--Ni)}
+.cell.SESIC{background:var(--S);color:var(--Si)}.cell.FINDE{background:var(--F);color:var(--Fi)}.cell.AUS{background:var(--A);color:var(--Ai)}
+.cell.cov{box-shadow:inset 0 0 0 2px var(--accent)}
+.cell small{display:block;font:400 10px var(--sans);opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+tr.covrow td{font:500 11px var(--mono);border-bottom:0;padding-top:8px}
+.dots{display:flex;flex-wrap:wrap;gap:3px;justify-content:center}
+.dot{white-space:nowrap;font-size:10px;padding:1px 4px;border-radius:4px;background:var(--line2);color:var(--muted)}
+.dot.zero{background:var(--bad);color:#fff}
+.legend{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:12px;color:var(--muted)}
+.chip{display:inline-block;padding:1px 7px;border-radius:4px;font:500 11px var(--mono)}
+.chip.M{background:var(--M);color:var(--Mi)}.chip.T{background:var(--T);color:var(--Ti)}.chip.N{background:var(--N);color:var(--Ni)}
+.chip.SESIC{background:var(--S);color:var(--Si)}.chip.FINDE{background:var(--F);color:var(--Fi)}.chip.AUS{background:var(--A);color:var(--Ai)}
+.gap{border:1px solid var(--bad);background:var(--panel);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.gap h3{margin:0;font-size:14px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+.cands{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
+.cand{border:1px solid var(--line);border-radius:7px;padding:9px;display:flex;flex-direction:column;gap:5px;min-width:0}
+.cand.best{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 8%,var(--panel))}
+.cand .nm{font-weight:600}
+.cand ul{margin:0;padding-left:16px;color:var(--muted);font-size:12px}
+.tag{font:600 10px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--ok)}
+.tag.w{color:var(--warn)}
+table.t{border-collapse:collapse;width:100%}
+table.t th,table.t td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line2);font-size:13px}
+table.t th{color:var(--muted);font-weight:600;font-size:12px}
+.tw{overflow-x:auto}
+.bar{height:8px;border-radius:4px;background:var(--line2);min-width:60px;overflow:hidden;display:flex}
+.bar i{display:block;height:100%}
+.bar .M{background:var(--Mi)}.bar .T{background:var(--Ti)}.bar .N{background:var(--Ni)}
+.num{font-family:var(--mono);text-align:right!important;font-variant-numeric:tabular-nums}
+.form{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+.form label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+.sheet{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;width:min(420px,100%);display:flex;flex-direction:column;gap:10px;max-height:90vh;overflow:auto}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.opts .btn{text-align:left}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:max(18px,env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:7px;z-index:60;font-size:13px}
+.hint{font-size:12px;color:var(--muted)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.chk{display:flex;gap:6px;align-items:center;font-size:12px}
+@media (max-width:520px){.opts{grid-template-columns:1fr}}
+.cell.ro{cursor:default}
+td.who.me{background:var(--accent-soft)}
+.login{max-width:440px;margin:6vh auto 0;display:flex;flex-direction:column;gap:14px}
+.seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--panel);padding:9px;font-weight:600;cursor:pointer;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.lf{display:flex;flex-direction:column;gap:10px}
+.lf label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+.err{color:var(--bad);font-size:13px}
+.av{border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:6px;background:var(--panel)}
+.av.new{border-color:var(--accent)}
+.av.me{border-color:var(--warn)}
+.av pre{margin:0;white-space:pre-wrap;font:13px/1.5 var(--sans)}
+textarea{width:100%;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:8px;font:13px/1.5 var(--sans);resize:vertical}
+.mono{font-family:var(--mono)}
+.pill{display:inline-block;padding:1px 8px;border-radius:10px;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:600}
+.pill.w{background:var(--bad-soft);color:var(--bad)}
+.dayrow{display:grid;grid-template-columns:92px 1fr;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line2)}
+.dayrow .cell{width:auto;display:inline-block;min-width:92px}
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>Turnos Balística</h1>
+      <div class="sub">Laboratorio de Balística Forense SIJIN-MEBOG · programación con equipos A y B</div>
+    </div>
+    <div class="row" id="topbtn"></div>
+  </div>
+  <div id="modebar"></div>
+  <div class="tabs" role="tablist" id="tabs"></div>
+  <div id="view"></div>
+</div>
+<div id="modal"></div>
+
+<script>window.__SERVER="https://script.google.com/macros/s/AKfycbyQKy2qGkcAwLcu6C6EElL_LKeYA75oW4Rwg-IBxkksT4d-KjWFxQn5f3sXtG1q30ljrA/exec";</script>
+<script>
+(function(){
+const D=86400000;
+const pd=s=>{const[a,b,c]=s.split('-').map(Number);return Date.UTC(a,b-1,c)};
+const fd=t=>new Date(t).toISOString().slice(0,10);
+const add=(s,n)=>fd(pd(s)+n*D);
+const dowi=s=>(new Date(pd(s)).getUTCDay()+6)%7;
+const monday=s=>add(s,-dowi(s));
+const DN=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'], DNL=['Lunes','Martes','Miercoles','Jueves','Viernes','Sabado','Domingo'];
+const MN=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+const dl=s=>{const d=new Date(pd(s));return d.getUTCDate()+' '+MN[d.getUTCMonth()]};
+const SLOTS=['M','T','N'];
+const AUS_TYPES=['Vacaciones','Permiso','Curso ascenso','Comisión','Incapacidad','Semana Santa','Navideño','Cumpleaños','Excusa','Otro'];
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------- estado ---------- */
+const DEF={
+ cfg:{start:'2026-10-26',weeks:8,anchor:'2026-10-26',anchorTeam:'A',umbral:3,sesic:1,lab:{M:'5hrs - 17hrs',T:'11hrs - 23hrs',N:'2y3'},short:{M:'5–17',T:'11–23',N:'2y3'}},
+ people:[
+  {id:'ort',name:'Ortiz',rank:'IJ.',team:'B',tipo:'fijo',fijoCode:'N',fijoFinde:false,can:{M:true,T:true,N:true}},
+  {id:'esc',name:'Escobar',rank:'IJ.',team:'A',tipo:'rota',can:{M:true,T:true,N:true}},
+  {id:'pin',name:'Pino',rank:'IJ.',team:'A',tipo:'rota',can:{M:true,T:true,N:true}},
+  {id:'gut',name:'Gutierrez',rank:'SI.',team:'B',tipo:'rota',can:{M:true,T:true,N:true}},
+  {id:'pri',name:'Prieto',rank:'SI.',team:'B',tipo:'rota',can:{M:true,T:true,N:true}},
+  {id:'cla',name:'Claudia',rank:'SI.',team:'B',tipo:'rota',can:{M:true,T:true,N:true}},
+  {id:'oso',name:'Osorio',rank:'PT.',team:'A',tipo:'rota',can:{M:true,T:true,N:true}}],
+ abs:[
+  {id:'a1',pid:'pin',type:'Vacaciones',from:'2026-10-26',to:'2026-11-04'},
+  {id:'a2',pid:'pri',type:'Curso ascenso',from:'2026-10-26',to:'2026-11-08'},
+  {id:'a3',pid:'ort',type:'Curso ascenso',from:'2026-10-26',to:'2026-11-08'},
+  {id:'a4',pid:'oso',type:'Permiso',from:'2026-10-26',to:'2026-10-26'}],
+ ov:{}
+};
+DEF.avisos=[];
+const SERVER=window.__SERVER||null;
+let st;const KEY='turnosBalistica1';
+try{st=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){}
+if(SERVER||!st||!st.cfg)st=JSON.parse(JSON.stringify(DEF));
+st.avisos=st.avisos||[];
+let role=SERVER?null:'admin',CRED=null,GK=null,ver=0,dirty=false,pubSnap=null,seg=null,loginErr='',loginMode='ver',busy=false,listo=true,newer=false;
+const lsGet=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
+const lsSet=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
+const save=()=>{if(SERVER){dirty=true;return}lsSet(KEY,JSON.stringify(st))};
+const todayISO=()=>new Date().toLocaleDateString('en-CA');
+const avTo=new Set();
+let tab='prog',wi=0,edit=null,toastT=null,showAll={},yo=lsGet('tb_yo')||'',pubDlg=null;
+function srv(q){return fetch(SERVER,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(q)}).then(r=>r.json())}
+const P=id=>st.people.find(p=>p.id===id);
+const pn=p=>p.rank+' '+p.name;
+const lab=c=>st.cfg.lab[c], sh=c=>st.cfg.short[c];
+
+/* ---------- motor ---------- */
+const effW=()=>{const c=st.cfg,s0=monday(c.start);return Math.max(c.weeks,Math.min(104,Math.ceil((pd(new Date().toLocaleDateString('en-CA'))-pd(s0))/(7*D))+c.weeks))};
+function* perms(a,k=0){if(k>=a.length-1){yield a.slice();return}for(let i=k;i<a.length;i++){[a[k],a[i]]=[a[i],a[k]];yield* perms(a,k+1);[a[k],a[i]]=[a[i],a[k]]}}
+function build(){
+ const cfg=st.cfg,start=monday(cfg.start),days=[];
+ const prev={},cnt={},sc={},ls={};
+ st.people.forEach(p=>{prev[p.id]=null;cnt[p.id]={M:0,T:0,N:0};sc[p.id]=0;ls[p.id]=-1});
+ const am={};st.abs.forEach(a=>{for(let t=pd(a.from);t<=pd(a.to);t+=D)am[a.pid+'|'+fd(t)]=a.type});
+ const nx={M:'T',T:'N',N:'M'};let gi=0;
+ for(let w=0,W=effW();w<W;w++){
+  const m=add(start,w*7),wk=Math.round((pd(m)-pd(monday(cfg.anchor)))/(7*D));
+  const other=cfg.anchorTeam==='A'?'B':'A',wkTeam=((wk%2)+2)%2===0?cfg.anchorTeam:other;
+  const wa={};st.people.forEach(p=>{let c=0;for(let i=0;i<7;i++)if(am[p.id+'|'+add(m,i)])c++;wa[p.id]=c});
+  for(let i=0;i<7;i++,gi++){
+   const date=add(m,i),we=i>=5,as={};
+   const isA=p=>am[p.id+'|'+date];
+   const inPool=p=>!(isA(p)&&wa[p.id]>=cfg.umbral);
+   const fixCov={M:0,T:0,N:0};
+   st.people.filter(p=>p.tipo==='fijo').forEach(p=>{
+     if(we&&!p.fijoFinde)as[p.id]={plan:'FINDE'};else{as[p.id]={plan:p.fijoCode};if(!(isA(p)&&wa[p.id]>=cfg.umbral))fixCov[p.fijoCode]++}});
+   const rota=st.people.filter(p=>p.tipo==='rota');
+   let pool,req=SLOTS.filter(s=>we||!fixCov[s]);
+   if(we){pool=rota.filter(p=>p.team===wkTeam&&inPool(p));rota.filter(p=>p.team!==wkTeam).forEach(p=>as[p.id]={plan:'FINDE'})}
+   else pool=rota.filter(inPool);
+   let sn=0;
+   if(!we){sn=Math.min(cfg.sesic,Math.max(0,pool.length-req.length));
+     const c=pool.slice().sort((a,b)=>sc[a.id]-sc[b.id]||ls[a.id]-ls[b.id]||a.id.localeCompare(b.id));
+     c.slice(0,sn).forEach(p=>{as[p.id]={plan:'SESIC'};sc[p.id]++;ls[p.id]=gi});}
+   const wk2=pool.filter(p=>!as[p.id]);
+   const base=['N','M','T'].filter(s=>req.includes(s));
+   const seats=wk2.length<=base.length?base.slice(0,wk2.length):base.concat(Array.from({length:wk2.length-base.length},(_,k)=>['N','M','T'][k%3]));
+   const cost=(p,s)=>{const pv=prev[p.id];let c=pv==null?0:(s===nx[pv]?0:s===pv?1.2:2);c+=cnt[p.id][s]*0.3;if(!p.can[s])c+=100;return c};
+   let best=null,bc=1e9;
+   if(wk2.length){for(const pr of perms(seats.slice())){let c=0;for(let k=0;k<wk2.length;k++)c+=cost(wk2[k],pr[k]);if(c<bc){bc=c;best=pr.slice()}}
+     wk2.forEach((p,k)=>{as[p.id]={plan:best[k]};prev[p.id]=best[k];cnt[p.id][best[k]]++})}
+   st.people.forEach(p=>{
+     if(!as[p.id])as[p.id]={plan:'SESIC'};
+     const a=as[p.id];a.code=a.plan;
+     if(isA(p)){a.code='AUS';a.aus=am[p.id+'|'+date]}
+     else{const o=st.ov[date+'|'+p.id];if(o){a.code=o.code;a.ovr=true;a.para=o.para||null}}
+   });
+   days.push({date,i,we,wkTeam,as});
+  }
+ }
+ days.forEach(d=>{d.cov={M:0,T:0,N:0};st.people.forEach(p=>{const c=d.as[p.id].code;if(d.cov[c]!==undefined)d.cov[c]++});
+   d.gaps=SLOTS.filter(s=>d.cov[s]===0);
+   d.lost={};d.gaps.forEach(s=>d.lost[s]=st.people.filter(p=>d.as[p.id].code==='AUS'&&d.as[p.id].plan===s).map(p=>p.id));});
+ return days;
+}
+const snapN=()=>JSON.stringify({cfg:st.cfg,people:st.people,abs:st.abs,ov:st.ov});
+function buildFor(o){const k=st;st=o;try{return build()}finally{st=k}}
+function coverCount(pid){return Object.entries(st.ov).filter(([k,v])=>k.endsWith('|'+pid)&&v.cover).length}
+function suggest(days,di,slot){
+ const d=days[di],out=[];
+ const lostIds=d.lost[slot]||[];
+ st.people.forEach(p=>{
+  const a=d.as[p.id];if(a.code==='AUS'||!p.can[slot])return;
+  let base,why=[],kind;
+  if(SLOTS.includes(a.code)){if(d.cov[a.code]<2)return;base=.5;kind='mover';why.push('Hoy hay 2 o más en '+sh(a.code)+': pasa a '+sh(slot)+' y ese turno sigue cubierto')}
+  else if(a.code==='SESIC'){base=1;kind='sesic';why.push('Estaba en tareas SESIC ese día')}
+  else if(a.code==='FINDE'){base=p.tipo==='fijo'?5:4;kind='descanso';why.push('Estaba en descanso: se le debe un franco compensatorio')}
+  else return;
+  let sc=base;
+  const y=di>0?days[di-1].as[p.id].code:null,t=di<days.length-1?days[di+1].as[p.id].code:null;
+  if(y==='N'&&slot==='M'){sc+=1.5;why.push('Venía de 2y3 la noche anterior y entra a madrugar')}
+  if(t==='M'&&slot==='N'){sc+=1.5;why.push('Tendría 2y3 hoy y madruga mañana')}
+  let run=0;for(let k=di-1;k>=0&&run<10;k--){if(['M','T','N','SESIC'].includes(days[k].as[p.id].code))run++;else break}
+  if(run>=6){sc+=2;why.push('Lleva '+run+' días seguidos trabajando')}
+  const cc=coverCount(p.id);if(cc){sc+=cc*.8;why.push('Ya cubrió '+cc+' vez'+(cc>1?'ces':'')+' en este periodo')}
+  if(lostIds.some(id=>P(id).team===p.team)){sc-=.3;why.push('Mismo equipo que quien se ausenta')}
+  if(!why.length)why.push('Disponible');
+  out.push({pid:p.id,score:Math.round(sc*10)/10,kind,why});
+ });
+ return out.sort((a,b)=>a.score-b.score);
+}
+function applyCover(date,pid,slot,para){st.ov[date+'|'+pid]={code:slot,cover:true,para:para||null}}
+
+/* ---------- vistas ---------- */
+let days=build();
+function goToday(){const i=Math.floor((pd(todayISO())-pd(days[0].date))/(7*D));wi=Math.max(0,Math.min(days.length/7-1,i))}
+goToday();
+const rebuild=()=>{days=build();save()};
+const gapsAll=()=>{const g=[],t=todayISO();days.forEach((d,di)=>{if(d.date>=t)d.gaps.forEach(s=>g.push({di,s}))});return g};
+function toast(m){const t=document.createElement('div');t.className='toast';t.textContent=m;document.body.appendChild(t);clearTimeout(toastT);toastT=setTimeout(()=>t.remove(),2200)}
+
+function unseen(){const seen=+lsGet('tb_seen_'+(SERVER||'l'))||0;return (st.avisos||[]).filter(x=>x.id>seen).length}
+function renderTabs(){
+ const n=gapsAll().length,u=role==='admin'?Object.keys(pendientes().per).length:unseen();
+ const av='Avisos'+(u?'<span class="n" style="background:'+(role==='admin'?'var(--warn)':'var(--accent)')+';color:#fff">'+u+'</span>':'');
+ const T=role==='viewer'?[['prog','Programación'],['mis','Mis turnos'],['av',av]]:[['prog','Programación'],['aus','Ausencias y cobertura'+(n?'<span class="n">'+n+'</span>':'')],['eq','Equidad'],['av',av],['cfg','Equipo y reglas']];
+ if(!T.some(x=>x[0]===tab))tab='prog';
+ document.getElementById('tabs').innerHTML=T.map(([k,l])=>`<button class="tab" role="tab" aria-selected="${tab===k}" data-act="tab" data-k="${k}">${l}</button>`).join('');
+}
+function renderTop(){
+ const el=document.getElementById('topbtn'),mb=document.getElementById('modebar');
+ if(role===null){el.innerHTML='';mb.innerHTML='';return}
+ let h='<button class="btn" data-act="copy">Copiar semana</button><button class="btn" data-act="xlsx">Descargar Excel</button>';
+ if(SERVER&&role==='admin')h+=`<button class="btn pri" data-act="pub" ${dirty?'':'disabled'}>${dirty?'Publicar cambios':'Todo publicado'}</button>`;
+ if(SERVER)h+='<button class="btn" data-act="logout">Salir</button>';
+ el.innerHTML=h;
+ let m='';
+ if(!SERVER)m='<div class="banner"><span class="pill">Modo de prueba</span><span class="hint">Sin servidor: los cambios se guardan solo en este navegador.</span></div>';
+ else if(role==='viewer')m='<div class="banner"><span class="pill">Solo lectura</span><span class="hint">Entraste con la clave del grupo. Solo el administrador puede cambiar turnos.</span></div>';
+ else m='<div class="banner'+(newer?' bad':'')+'"><span class="pill">Administrador · '+esc((seg&&seg.yo)||'')+'</span>'+(newer?'<b style="color:var(--bad)">Otro administrador publicó cambios nuevos. Al publicar los tuyos se te avisará si chocan.</b>':'<span class="hint">'+(dirty?'Tienes cambios sin publicar: nadie más los ve todavía.':'Lo que ves es lo que ven todos.')+'</span>')+'</div>';
+ mb.innerHTML=m;
+}
+function cellHtml(d,p){
+ const a=d.as[p.id];let t,sub='';
+ if(a.code==='AUS'){t='Ausente';sub=a.aus}
+ else if(a.code==='FINDE')t='Descanso';
+ else if(a.code==='SESIC')t='SESIC';
+ else t=sh(a.code);
+ if(a.ovr&&a.para)sub='cubre a '+esc(P(a.para)?P(a.para).name:'?');
+ else if(a.ovr)sub='cambio manual';
+ if(role!=='admin')return `<div class="cell ro ${a.code}${a.ovr?' cov':''}" title="${esc(pn(p))} · ${dl(d.date)}">${t}${sub?`<small>${sub}</small>`:''}</div>`;
+ return `<button class="cell ${a.code}${a.ovr?' cov':''}" data-act="edit" data-p="${p.id}" data-d="${d.date}" title="${esc(pn(p))} · ${dl(d.date)}">${t}${sub?`<small>${sub}</small>`:''}</button>`;
+}
+function porResolver(){
+ if(role!=='admin')return '';
+ const t=todayISO(),L=gapsAll().filter(g=>days[g.di].date>=t).slice(0,4);
+ if(!L.length)return '';
+ const rows=L.map(({di,s})=>{const d=days[di],sg=suggest(days,di,s),b=sg[0],lost=(d.lost[s]||[]);
+  return `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line2)"><span class="chip ${s}">${sh(s)}</span><b>${DN[d.i]} ${dl(d.date)}</b>${lost.length?`<span class="hint">por ausencia de ${esc(lost.map(id=>P(id).name).join(', '))}</span>`:''}<span class="sp"></span>${b?`<span>Sugerido: <b>${esc(pn(P(b.pid)))}</b>${b.kind==='descanso'?' <span class="tag w">rompe descanso</span>':''}</span><button class="btn sm pri" data-act="solve" data-d="${d.date}" data-p="${b.pid}" data-s="${s}" data-l="${lost[0]||''}">Asignar</button>`:'<span class="hint">Sin candidatos</span>'}</div>`}).join('');
+ return `<div class="panel" style="border-color:var(--bad)"><div class="row"><b style="color:var(--bad)">Por resolver (próximos turnos sin cubrir)</b><span class="sp"></span><button class="btn sm" data-act="tab" data-k="aus">Ver todas las opciones</button></div>${rows}</div>`;
+}
+function vProg(){
+ const per=days.length/7;if(wi>=per)wi=per-1;if(wi<0)wi=0;
+ const wd=days.slice(wi*7,wi*7+7),wkT=wd[0].wkTeam;
+ const g=wd.flatMap(d=>d.gaps.map(s=>({d,s})));
+ const head=wd.map(d=>`<th class="${d.we?'we':''}">${DN[d.i]}<small>${dl(d.date)}</small></th>`).join('');
+ const people=[...st.people].sort((a,b)=>(a.tipo==='fijo')-(b.tipo==='fijo')||a.team.localeCompare(b.team)||a.name.localeCompare(b.name));
+ const rows=people.map(p=>`<tr><td class="who${p.id===yo?' me':''}"><span class="team ${p.team}">${p.team}</span> <b>${esc(pn(p))}</b>${p.tipo==='fijo'?'<div class="rk">Fijo '+sh(p.fijoCode)+' L–V</div>':''}</td>${wd.map(d=>`<td class="${d.we?'we':''}">${cellHtml(d,p)}</td>`).join('')}</tr>`).join('');
+ const cov=`<tr class="covrow"><td class="who" style="font:600 12px var(--sans)">Cobertura<div class="rk" style="font-weight:400">personas por turno</div></td>${wd.map(d=>`<td class="${d.we?'we':''}"><div class="dots">${SLOTS.map(s=>`<span class="dot ${d.cov[s]?'':'zero'}">${sh(s)}:${d.cov[s]}</span>`).join('')}</div></td>`).join('')}</tr>`;
+ return `
+ <div class="row">
+  <button class="btn" data-act="wk" data-n="-1" ${wi<=0?'disabled':''}>‹ Anterior</button>
+  <b>Semana del ${dl(wd[0].date)} al ${dl(wd[6].date)}</b>
+  <button class="btn" data-act="wk" data-n="1" ${wi>=per-1?'disabled':''}>Siguiente ›</button>
+  <span class="sp"></span>
+  <span class="sub">Semana ${wi+1} de ${per}</span>
+ </div>
+ <div class="banner ${g.length?'bad':''}">
+  <span>Fin de semana trabaja <span class="team ${wkT}">${wkT}</span> <b>Equipo ${wkT}</b>; descansa el Equipo ${wkT==='A'?'B':'A'}.</span>
+  <span class="sp"></span>
+  ${role!=='admin'?(g.length?'<b style="color:var(--warn)">Hay turnos por definir esta semana</b>':''):g.length?`<b style="color:var(--bad)">${g.length} turno${g.length>1?'s':''} sin cubrir esta semana</b> <button class="btn sm" data-act="tab" data-k="aus">Ver sugerencias</button>`:'<b style="color:var(--ok)">Todos los turnos cubiertos</b>'}
+ </div>
+ ${porResolver()}
+ <div class="grid-scroll"><table class="g"><thead><tr><th class="who">Funcionario</th>${head}</tr></thead><tbody>${rows}${cov}</tbody></table></div>
+ <div class="legend"><span><span class="chip M">${sh('M')}</span> madrugada</span><span><span class="chip T">${sh('T')}</span> tarde</span><span><span class="chip N">${sh('N')}</span> noche</span><span><span class="chip SESIC">SESIC</span> tareas</span><span><span class="chip FINDE">Descanso</span></span><span><span class="chip AUS">Ausente</span></span><span>Contorno turquesa = cambio o cobertura manual</span></div>
+ ${role==='admin'?'<div class="hint">Toca cualquier casilla para marcar una ausencia o cambiar el turno de esa persona ese día.</div>':'<div class="hint">Tu fila aparece resaltada si elegiste tu nombre en “Mis turnos”.</div>'}`;
+}
+function vAus(){
+ const gs=gapsAll();
+ const opts=st.people.map(p=>`<option value="${p.id}">${esc(pn(p))}</option>`).join('');
+ const list=[...st.abs].sort((a,b)=>a.from.localeCompare(b.from)).map(a=>`<tr><td>${esc(P(a.pid)?pn(P(a.pid)):'?')}</td><td>${esc(a.type)}</td><td>${dl(a.from)} → ${dl(a.to)}</td><td class="num">${(pd(a.to)-pd(a.from))/D+1} d</td><td><button class="btn sm" data-act="delabs" data-id="${a.id}">Quitar</button></td></tr>`).join('')||'<tr><td colspan="5" class="hint">Sin ausencias registradas.</td></tr>';
+ const cards=gs.map(({di,s})=>{
+  const d=days[di],sug=suggest(days,di,s),lost=(d.lost[s]||[]).map(id=>P(id).name).join(', ');
+  const k=di+s,many=showAll[k],shown=many?sug:sug.slice(0,3);
+  return `<div class="gap"><h3><span class="chip ${s}">${sh(s)}</span> ${DNL[d.i]} ${dl(d.date)} sin cubrir${lost?` <span class="sub">· se ausenta ${esc(lost)}</span>`:''}</h3>
+  ${sug.length?`<div class="cands">${shown.map((c,i)=>`<div class="cand ${i===0?'best':''}"><div class="row"><span class="nm">${esc(pn(P(c.pid)))}</span><span class="team ${P(c.pid).team}">${P(c.pid).team}</span><span class="sp"></span>${i===0?'<span class="tag">Mejor opción</span>':''}${c.kind==='descanso'?'<span class="tag w">Rompe descanso</span>':''}</div><ul>${c.why.map(w=>`<li>${esc(w)}</li>`).join('')}</ul><button class="btn sm ${i===0?'pri':''}" data-act="cover" data-d="${d.date}" data-p="${c.pid}" data-s="${s}" data-l="${(d.lost[s]||[])[0]||''}">Asignar</button></div>`).join('')}</div>${sug.length>3?`<button class="btn sm" data-act="more" data-k="${k}" style="align-self:flex-start">${many?'Ver menos':'Ver las '+sug.length+' opciones'}</button>`:''}`
+  :'<div class="hint">Nadie puede cubrir este turno con las reglas actuales. Revisa en “Equipo y reglas” quién puede hacer cada turno.</div>'}
+  </div>`}).join('');
+ return `
+ <div class="two">
+  <div class="panel"><h2>Registrar ausencia</h2>
+   <div class="form">
+    <label>Funcionario<select id="f-p">${opts}</select></label>
+    <label>Motivo<select id="f-t">${AUS_TYPES.map(t=>`<option>${t}</option>`).join('')}</select></label>
+    <label>Desde<input type="date" id="f-a"></label>
+    <label>Hasta<input type="date" id="f-b"></label>
+    <button class="btn pri" data-act="addabs">Agregar</button>
+   </div>
+   <div class="hint" style="margin-top:8px">Al agregarla, la programación se recalcula y abajo aparecen los turnos que quedan sin cubrir con quién podría cubrir. Si la ausencia dura ${st.cfg.umbral} días o más en una semana, esa persona sale de la rotación esa semana y el resto se reparte solo.</div>
+  </div>
+  <div class="panel"><h2>Ausencias registradas</h2><div class="tw"><table class="t"><thead><tr><th>Funcionario</th><th>Motivo</th><th>Fechas</th><th class="num">Días</th><th></th></tr></thead><tbody>${list}</tbody></table></div></div>
+ </div>
+ <div class="row"><h2 style="margin:0">Turnos sin cubrir${gs.length?` (${gs.length})`:''}</h2><span class="sp"></span>${gs.length?'<button class="btn pri" data-act="autocover">Cubrir todo con la mejor opción</button>':''}${Object.keys(st.ov).length?'<button class="btn" data-act="clearov">Deshacer asignaciones manuales</button>':''}</div>
+ ${gs.length?`<div style="display:flex;flex-direction:column;gap:10px">${cards}</div>`:'<div class="banner"><b style="color:var(--ok)">No hay turnos sin cubrir.</b> Agrega una ausencia para ver cómo se reacomoda la programación.</div>'}`;
+}
+function stats(){
+ const s={};st.people.forEach(p=>s[p.id]={M:0,T:0,N:0,SESIC:0,FINDE:0,AUS:0,wk:0,cov:0});
+ days.forEach(d=>st.people.forEach(p=>{const a=d.as[p.id];s[p.id][a.code]++;if(d.we&&SLOTS.includes(a.code))s[p.id].wk++;if(a.ovr&&a.para)s[p.id].cov++}));
+ return s;
+}
+function vEq(){
+ const s=stats(),mx=Math.max(1,...st.people.map(p=>s[p.id].M+s[p.id].T+s[p.id].N));
+ const rows=st.people.map(p=>{const x=s[p.id],tot=x.M+x.T+x.N;return `<tr><td><span class="team ${p.team}">${p.team}</span> ${esc(pn(p))}</td><td style="min-width:140px"><div class="bar" style="width:${tot/mx*100}%"><i class="M" style="flex:${x.M}"></i><i class="T" style="flex:${x.T}"></i><i class="N" style="flex:${x.N}"></i></div></td><td class="num">${tot}</td><td class="num">${x.M}</td><td class="num">${x.T}</td><td class="num">${x.N}</td><td class="num">${x.wk}</td><td class="num">${x.SESIC}</td><td class="num">${x.AUS}</td><td class="num">${x.cov}</td></tr>`}).join('');
+ return `<div class="panel"><h2>Carga por funcionario · ${dl(days[0].date)} a ${dl(days[days.length-1].date)}</h2>
+ <div class="tw"><table class="t"><thead><tr><th>Funcionario</th><th>Turnos</th><th class="num">Total</th><th class="num">${sh('M')}</th><th class="num">${sh('T')}</th><th class="num">${sh('N')}</th><th class="num">En fin de sem.</th><th class="num">SESIC</th><th class="num">Ausente</th><th class="num">Coberturas</th></tr></thead><tbody>${rows}</tbody></table></div>
+ <div class="hint" style="margin-top:8px">Sirve para ver si alguien está cargado de noches o de fines de semana. “Coberturas” cuenta las veces que cubrió a otro. Quien cubre en un día de descanso queda con un franco compensatorio pendiente.</div></div>`;
+}
+function vCfg(){
+ const c=st.cfg;
+ const pr=st.people.map((p,i)=>`<tr>
+  <td><input data-f="rank" data-i="${i}" value="${esc(p.rank)}" size="3"></td>
+  <td><input data-f="name" data-i="${i}" value="${esc(p.name)}" size="11"></td>
+  <td><select data-f="team" data-i="${i}"><option ${p.team==='A'?'selected':''}>A</option><option ${p.team==='B'?'selected':''}>B</option></select></td>
+  <td><select data-f="tipo" data-i="${i}"><option value="rota" ${p.tipo==='rota'?'selected':''}>Rota</option><option value="fijo" ${p.tipo==='fijo'?'selected':''}>Fijo L–V</option></select></td>
+  <td>${p.tipo==='fijo'?`<select data-f="fijoCode" data-i="${i}">${SLOTS.map(s=>`<option value="${s}" ${p.fijoCode===s?'selected':''}>${sh(s)}</option>`).join('')}</select>`:'<span class="hint">—</span>'}</td>
+  <td><div class="row" style="gap:8px">${SLOTS.map(s=>`<label class="chk"><input type="checkbox" data-f="can" data-s="${s}" data-i="${i}" ${p.can[s]?'checked':''}>${sh(s)}</label>`).join('')}</div></td>
+  <td><button class="btn sm" data-act="delp" data-i="${i}">Quitar</button></td></tr>`).join('');
+ return `<div class="panel"><h2>Funcionarios</h2><div class="tw"><table class="t"><thead><tr><th>Grado</th><th>Apellido</th><th>Equipo</th><th>Tipo</th><th>Turno fijo</th><th>Puede hacer</th><th></th></tr></thead><tbody>${pr}</tbody></table></div>
+ <div class="row" style="margin-top:10px"><button class="btn" data-act="addp">Agregar funcionario</button><span class="hint">“Rota” entra al ciclo ${sh('M')} → ${sh('T')} → ${sh('N')}. “Fijo” cubre siempre el mismo turno de lunes a viernes y descansa el fin de semana (como Ortiz con 2y3).</span></div></div>
+ <div class="two">
+ <div class="panel"><h2>Calendario</h2><div class="form">
+  <label>Primer lunes<input type="date" id="c-start" value="${monday(c.start)}"></label>
+  <label>Semanas por delante desde hoy<select id="c-weeks">${[4,6,8,12,16,26,52].map(n=>`<option ${c.weeks===n?'selected':''}>${n}</option>`).join('')}</select></label>
+  <label>La semana del<input type="date" id="c-anchor" value="${c.anchor}"></label>
+  <label>el fin de semana trabaja<select id="c-team"><option ${c.anchorTeam==='A'?'selected':''}>A</option><option ${c.anchorTeam==='B'?'selected':''}>B</option></select></label>
+ </div><div class="hint" style="margin-top:8px">Los equipos se alternan cada semana. Con tu Excel, el fin de semana del 31 oct–1 nov trabaja el A y el del 7–8 nov, el B.</div></div>
+ <div class="panel"><h2>Reglas</h2><div class="form">
+  <label>Personas en tareas SESIC por día (L–V)<input type="number" id="c-sesic" min="0" max="4" value="${c.sesic}"></label>
+  <label>Ausencia que saca de la rotación (días en la semana)<input type="number" id="c-umbral" min="1" max="7" value="${c.umbral}"></label>
+ </div><div class="form" style="margin-top:8px">${SLOTS.map(s=>`<label>Texto del turno ${sh(s)} (Excel)<input data-lab="${s}" value="${esc(c.lab[s])}"></label>`).join('')}</div>
+ <div class="hint" style="margin-top:8px">Cada día debe haber al menos una persona en ${sh('M')}, ${sh('T')} y ${sh('N')}. Si sobra gente, se suma a 2y3 o a los otros turnos.</div>
+ <div class="row" style="margin-top:10px"><button class="btn" data-act="reset">Volver a los datos de ejemplo</button></div></div>
+ </div>`;
+}
+function ctext(a){return a.code==='AUS'?'Ausente · '+a.aus:a.code==='FINDE'?'Descanso':a.code==='SESIC'?'Tareas SESIC':lab(a.code)}
+function vMis(){
+ const opts='<option value="">Elige tu nombre</option>'+st.people.map(p=>`<option value="${p.id}" ${p.id===yo?'selected':''}>${esc(pn(p))}</option>`).join('');
+ const t=todayISO(),rows=[];
+ if(yo&&P(yo))days.filter(d=>d.date>=t).slice(0,21).forEach(d=>{
+   const a=d.as[yo];let note='';
+   if(SLOTS.includes(a.code)){const co=st.people.filter(p=>p.id!==yo&&d.as[p.id].code===a.code).map(p=>p.name);note=co.length?'Con '+co.join(', '):'Solo en este turno'}
+   if(a.ovr&&a.para&&P(a.para))note='Cubres a '+P(a.para).name;
+   rows.push(`<div class="dayrow"><div><b>${DN[d.i]}</b> <span class="mono">${dl(d.date)}</span></div><div class="row"><span class="cell ro ${a.code}">${esc(a.code==='AUS'?'Ausente':a.code==='FINDE'?'Descanso':a.code==='SESIC'?'SESIC':lab(a.code))}</span><span class="hint">${esc(note)}</span></div></div>`)});
+ const nxt=yo&&P(yo)?days.find(d=>d.date>=t&&SLOTS.includes(d.as[yo].code)):null;
+ return `<div class="panel"><h2>Mis turnos</h2><div class="form"><label>Funcionario<select id="yo">${opts}</select></label></div>
+ ${nxt?`<div class="banner" style="margin-top:10px"><span>Tu próximo turno: <b>${DNL[nxt.i]} ${dl(nxt.date)} · ${esc(lab(nxt.as[yo].code))}</b></span></div>`:''}
+ <div style="margin-top:8px">${rows.join('')||'<div class="hint">Elige tu nombre para ver tus próximos 21 días.</div>'}</div></div>`;
+}
+const fmtT=iso=>{try{return new Date(iso).toLocaleString('es-CO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}catch(e){return iso}};
+function vAv(){
+ const seen=+lsGet('tb_seen_'+(SERVER||'l'))||0;
+ const list=(st.avisos||[]).map(a=>{const me=yo&&(a.pids||[]).includes(yo);return `<div class="av ${a.id>seen?'new':''} ${me?'me':''}"><div class="row"><b>${esc(a.titulo||'Aviso')}</b>${a.id>seen?'<span class="pill">Nuevo</span>':''}${me?'<span class="pill w">Te afecta</span>':''}${role==='admin'&&(a.pids||[]).length?'<span class="pill">Para: '+a.pids.map(id=>P(id)?esc(P(id).name):'').join(', ')+'</span>':''}<span class="sp"></span><span class="hint">${fmtT(a.t)}${a.por?' · '+esc(a.por):''}</span></div><pre>${esc(a.texto)}</pre>${role==='admin'?`<div class="row"><button class="btn sm" data-act="avcopy" data-id="${a.id}">Copiar para WhatsApp</button><button class="btn sm" data-act="avdel" data-id="${a.id}">Borrar</button></div>`:''}</div>`}).join('')||'<div class="hint">Todavía no hay avisos.</div>';
+ const pn_=role==='admin'?pendientes():{per:{},n:0};
+ const pids_=Object.keys(pn_.per);
+ const pend=role==='admin'?(pids_.length?`<div class="panel" style="border-color:var(--accent)"><div class="row"><h2 style="margin:0">Por notificar (${pids_.length} funcionario${pids_.length>1?'s':''})</h2><span class="sp"></span><button class="btn pri" data-act="pnotif">Publicar aviso a los afectados</button><button class="btn" data-act="pcopyall">Copiar todos</button><button class="btn" data-act="pmark">Marcar como notificado</button></div>
+  <div class="hint" style="margin:6px 0">Son los turnos que cambiaron desde la última vez que avisaste. Cada persona tiene su mensaje listo para WhatsApp.</div>
+  <div style="display:flex;flex-direction:column;gap:6px">${pids_.map(id=>`<div class="av"><div class="row"><span class="team ${P(id).team}">${P(id).team}</span><b>${esc(pn(P(id)))}</b><span class="sp"></span><button class="btn sm" data-act="pcopy" data-p="${id}">Copiar mensaje</button></div><pre>${pn_.per[id].slice(0,8).map(z=>esc(z.l)).join('\n')}${pn_.per[id].length>8?'\n… y '+(pn_.per[id].length-8)+' más':''}</pre></div>`).join('')}</div></div>`:'<div class="banner"><b style="color:var(--ok)">Nada por notificar.</b><span class="hint">Cuando cambies o asignes turnos, aquí aparece quién debe enterarse.</span></div>'):'';
+ const to=role==='admin'?`<div style="margin:8px 0"><div class="hint" style="margin-bottom:4px">Para: ${avTo.size?'solo los marcados':'todo el grupo'}</div><div class="row" style="gap:6px"><button class="btn sm ${avTo.size?'':'pri'}" data-act="avall">Todos</button>${st.people.map(p=>`<button class="btn sm ${avTo.has(p.id)?'pri':''}" data-act="avto" data-p="${p.id}">${esc(p.name)}</button>`).join('')}</div></div>`:'';
+ const comp=role==='admin'?pend+`<div class="panel"><h2>Nuevo aviso</h2><div class="form" style="margin-bottom:8px"><label style="flex:1">Título<input id="av-t" placeholder="Ej. Cambio de turno del sábado" style="width:100%"></label></div>${to}<textarea id="av-x" rows="4" placeholder="Escribe el mensaje"></textarea>
+ <div class="row" style="margin-top:8px"><button class="btn pri" data-act="avpub">Publicar en la app</button><button class="btn" data-act="avwa">Copiar para WhatsApp</button><button class="btn" data-act="avweek">Cargar resumen de la semana</button></div>
+ <div class="hint" style="margin-top:6px">El aviso aparece con un punto de “Nuevo” a quien entre a la app. Para que llegue al celular, pega el mismo texto en el grupo de WhatsApp.${SERVER?' Publicar también envía los cambios de programación que tengas pendientes.':''}</div></div>`:'';
+ return comp+`<div style="display:flex;flex-direction:column;gap:10px">${list}</div>`;
+}
+function vAcc(){
+ if(!SERVER||!seg)return '';
+ const url=location.href.split('#')[0],adm=seg.admins.map(a=>a.u);
+ return `<div class="panel"><h2>Acceso</h2>
+ <div class="two">
+ <div><b>Clave del grupo (solo lectura)</b><div class="hint">Quien la tenga puede ver la programación y los avisos, pero no cambiar nada.</div>
+  <div class="form" style="margin-top:6px"><label>Clave actual<input id="g-new" value="${esc(seg.grupo)}"></label><button class="btn" data-act="gsave">Cambiar clave</button><button class="btn" data-act="ginv">Copiar invitación</button></div></div>
+ <div><b>Administradores (${adm.length} de 2)</b><div class="hint">${adm.map(esc).join(' · ')}</div>
+  <div class="form" style="margin-top:6px"><label>Usuario del 2.º admin<input id="a2-u" size="12"></label><label>Contraseña (8+)<input id="a2-p" type="password" size="12"></label><button class="btn" data-act="a2save">${adm.length>1?'Reemplazar 2.º admin':'Agregar admin'}</button>${adm.length>1?'<button class="btn" data-act="a2del">Quitar 2.º admin</button>':''}</div>
+  <div class="form" style="margin-top:8px"><label>Mi nueva contraseña<input id="my-p" type="password" size="14"></label><button class="btn" data-act="mypass">Cambiar mi contraseña</button></div></div>
+ </div>
+ ${(st.log&&st.log.length)?'<h2 style="margin-top:14px">Historial de cambios</h2><div class="tw"><table class="t"><tbody>'+st.log.slice(-15).reverse().map(l=>`<tr><td class="mono">${esc(l.t)}</td><td>${esc(l.u)}</td><td>${esc(l.m)}</td></tr>`).join('')+'</tbody></table></div>':''}</div>`;
+}
+function vLogin(){
+ const m=loginMode;
+ const body=m==='ver'?`<div class="lf"><label>Clave del grupo<input id="l-g" type="password" autocomplete="off" value="${esc(lsGet('tb_gk')||'')}"></label><button class="btn pri" data-act="login-ver">Ver turnos</button><div class="hint">Te la da el administrador. Solo permite mirar.</div></div>`
+ :m==='adm'?`<div class="lf"><label>Usuario<input id="l-u" autocomplete="username"></label><label>Contraseña<input id="l-p" type="password" autocomplete="current-password"></label><button class="btn pri" data-act="login-adm">Entrar</button>${listo?'':'<button class="btn" data-act="lm" data-m="ins">La aplicación aún no está instalada: instalar</button>'}</div>`
+ :`<div class="lf"><div class="hint">Primera vez: esto carga la programación de ejemplo en tu hoja de Google y crea al primer administrador.</div><label>Clave de instalación<input id="i-s" type="password"></label><label>Usuario del administrador<input id="i-u"></label><label>Contraseña (8 o más)<input id="i-p" type="password"></label><label>Clave del grupo (4 o más)<input id="i-g"></label><button class="btn pri" data-act="login-ins">Instalar</button></div>`;
+ return `<div class="login"><div><h1>Turnos Balística</h1><div class="sub">Laboratorio de Balística Forense SIJIN-MEBOG</div></div>
+ <div class="panel"><div class="seg" style="margin-bottom:12px"><button data-act="lm" data-m="ver" aria-pressed="${m==='ver'}">Ver turnos</button><button data-act="lm" data-m="adm" aria-pressed="${m!=='ver'}">Administrador</button></div>${body}${loginErr?`<div class="err" style="margin-top:8px">${esc(loginErr)}</div>`:''}${busy?'<div class="hint" style="margin-top:8px">Un momento…</div>':''}</div></div>`;
+}
+function render(){
+ renderTop();
+ if(role===null){document.getElementById('tabs').innerHTML='';document.getElementById('view').innerHTML=vLogin();renderModal();return}
+ renderTabs();
+ const v=document.getElementById('view');
+ if(tab==='av'&&(st.avisos||[]).length)lsSet('tb_seen_'+(SERVER||'l'),String(Math.max(...st.avisos.map(x=>x.id))));
+ v.innerHTML={prog:vProg,mis:vMis,aus:vAus,eq:vEq,av:vAv,cfg:()=>vCfg()+vAcc()}[tab]();
+ renderModal();
+}
+function renderModal(){
+ const m=document.getElementById('modal');
+ if(pubDlg){m.innerHTML=`<div class="sheet-bg"><div class="sheet" role="dialog" aria-label="Publicar cambios" data-stop="1"><b>Publicar cambios</b>
+  <div class="hint">${pubDlg.n?pubDlg.n+' cambio'+(pubDlg.n>1?'s':'')+' de turno desde hoy. Este texto se publica como aviso y puedes pegarlo en WhatsApp.':'No cambian turnos; solo se guardan ajustes.'}</div>
+  <textarea id="pd-x" rows="9">${esc(pubDlg.texto)}</textarea>
+  <label class="chk"><input type="checkbox" id="pd-a" ${pubDlg.n?'checked':''}> Publicar como aviso en la app</label>
+  <div class="row"><button class="btn pri" data-act="pubgo">Publicar</button><button class="btn" data-act="pubcopy">Copiar texto</button><span class="sp"></span><button class="btn" data-act="pubx">Cancelar</button></div></div></div>`;return}
+ if(!edit){m.innerHTML='';return}
+ const p=P(edit.pid),d=days.find(x=>x.date===edit.date),a=d.as[p.id];
+ m.innerHTML=`<div class="sheet-bg" data-act="close"><div class="sheet" role="dialog" aria-label="Editar casilla" data-stop="1">
+  <div><b>${esc(pn(p))}</b> · ${DNL[d.i]} ${dl(d.date)}<div class="sub">Plan: ${a.plan==='AUS'?'—':a.plan} · Ahora: ${a.code==='AUS'?'Ausente ('+esc(a.aus)+')':a.code}</div></div>
+  <div class="opts">${SLOTS.map(s=>`<button class="btn" data-act="setcode" data-c="${s}">${esc(lab(s))}</button>`).join('')}
+  <button class="btn" data-act="setcode" data-c="SESIC">Tareas SESIC</button><button class="btn" data-act="setcode" data-c="FINDE">Descanso / franco</button></div>
+  <div class="form"><label>Marcar ausente<select id="m-t">${AUS_TYPES.map(t=>`<option>${t}</option>`).join('')}</select></label><button class="btn" data-act="setaus">Ausente este día</button></div>
+  <div class="row">${a.ovr?'<button class="btn" data-act="clearcell">Quitar cambio manual</button>':''}${a.code==='AUS'?'<button class="btn" data-act="delausday">Quitar ausencia de este día</button>':''}<span class="sp"></span><button class="btn" data-act="close">Cerrar</button></div></div></div>`;
+}
+
+/* ---------- acciones ---------- */
+function removeAbsDay(pid,date){
+ const out=[];
+ st.abs.forEach(a=>{if(a.pid!==pid||date<a.from||date>a.to){out.push(a);return}
+  if(a.from<date)out.push({...a,id:a.id+'a',to:add(date,-1)});
+  if(a.to>date)out.push({...a,id:a.id+'b',from:add(date,1)})});
+ st.abs=out;
+}
+document.addEventListener('click',e=>{
+ const el=e.target.closest('[data-act]');if(!el)return;
+ if(el.dataset.act==='close'&&e.target.closest('[data-stop]')&&!e.target.closest('button[data-act="close"]'))return;
+ const x=el.dataset,a=x.act;
+ if(NEWACT(x,a,e))return;
+ if(a==='tab'){tab=x.k;render();return}
+ if(a==='wk'){wi+=+x.n;render();return}
+ if(a==='edit'){edit={pid:x.p,date:x.d};render();return}
+ if(a==='close'){edit=null;render();return}
+ if(a==='pubx'){pubDlg=null;render();return}
+ if(a==='setcode'){const k=edit.date+'|'+edit.pid;st.ov[k]={code:x.c,cover:false};edit=null;rebuild();render();return}
+ if(a==='clearcell'){delete st.ov[edit.date+'|'+edit.pid];edit=null;rebuild();render();return}
+ if(a==='setaus'){const t=document.getElementById('m-t').value;st.abs.push({id:'a'+Date.now(),pid:edit.pid,type:t,from:edit.date,to:edit.date});delete st.ov[edit.date+'|'+edit.pid];edit=null;rebuild();render();toast('Ausencia registrada');return}
+ if(a==='delausday'){removeAbsDay(edit.pid,edit.date);edit=null;rebuild();render();return}
+ if(a==='addabs'){
+  const pid=document.getElementById('f-p').value,t=document.getElementById('f-t').value,f=document.getElementById('f-a').value,u=document.getElementById('f-b').value||f;
+  if(!f||u<f){toast('Elige las fechas (desde, hasta)');return}
+  st.abs.push({id:'a'+Date.now(),pid,type:t,from:f,to:u});rebuild();render();
+  const n=gapsAll().length;toast(n?n+' turno'+(n>1?'s':'')+' sin cubrir: mira las sugerencias':'Registrada; todo sigue cubierto');return}
+ if(a==='delabs'){st.abs=st.abs.filter(z=>z.id!==x.id);rebuild();render();return}
+ if(a==='more'){showAll[x.k]=!showAll[x.k];render();return}
+ if(a==='cover'){applyCover(x.d,x.p,x.s,x.l);rebuild();render();toast(pn(P(x.p))+' cubre el '+sh(x.s)+' del '+dl(x.d));return}
+ if(a==='autocover'){let n=0;const skip=new Set();for(let g=0;g<400;g++){const gs=gapsAll().filter(z=>!skip.has(z.di+z.s));if(!gs.length)break;const{di,s}=gs[0];const sg=suggest(days,di,s);if(!sg.length){skip.add(di+s);continue}
+   applyCover(days[di].date,sg[0].pid,s,(days[di].lost[s]||[])[0]);days=build();n++}
+  rebuild();render();toast(n+' cobertura'+(n!==1?'s':'')+' asignada'+(n!==1?'s':''));return}
+ if(a==='clearov'){st.ov={};rebuild();render();return}
+ if(a==='addp'){st.people.push({id:'p'+Date.now(),name:'Nuevo',rank:'SI.',team:'A',tipo:'rota',can:{M:true,T:true,N:true},fijoCode:'N',fijoFinde:false});rebuild();render();return}
+ if(a==='delp'){const p=st.people[+x.i];st.people.splice(+x.i,1);st.abs=st.abs.filter(z=>z.pid!==p.id);rebuild();render();return}
+ if(a==='reset'){st=JSON.parse(JSON.stringify(DEF));st.nbase=snapN();rebuild();goToday();render();toast('Datos de ejemplo restaurados');return}
+});
+document.addEventListener('change',e=>{
+ const t=e.target;
+ if(t.id==='yo'){yo=t.value;lsSet('tb_yo',yo);render();return}
+ if(t.dataset.f){const p=st.people[+t.dataset.i];const f=t.dataset.f;
+  if(f==='can')p.can[t.dataset.s]=t.checked;else p[f]=t.value;
+  if(f==='tipo'&&!p.fijoCode)p.fijoCode='N';
+  rebuild();if(f==='tipo')render();return}
+ if(t.dataset.lab){st.cfg.lab[t.dataset.lab]=t.value;save();return}
+ const map={'c-start':v=>st.cfg.start=v,'c-weeks':v=>st.cfg.weeks=+v,'c-anchor':v=>st.cfg.anchor=v,'c-team':v=>st.cfg.anchorTeam=v,'c-sesic':v=>st.cfg.sesic=Math.max(0,+v),'c-umbral':v=>st.cfg.umbral=Math.max(1,+v)};
+ if(map[t.id]&&t.value){map[t.id](t.value);wi=0;rebuild();render()}
+});
+
+/* ---------- exportar ---------- */
+function codeText(d,p){const a=d.as[p.id];
+ if(a.code==='AUS')return a.aus.toLowerCase();if(a.code==='FINDE')return 'fin de semana';if(a.code==='SESIC')return 'tareas SESIC';return lab(a.code)}
+async function exportXlsx(){
+ if(typeof XLSX==='undefined'){toast('No cargó la librería de Excel');return}
+ const aoa=[];const wkn=days.length/7;
+ for(let w=0;w<wkn;w++){
+  const wd=days.slice(w*7,w*7+7);
+  aoa.push(['TURNO','Funcionario',...DNL,wd[0].wkTeam==='A'?'B':'A']);
+  aoa.push(['','',...wd.map(d=>{const t=new Date(pd(d.date));return t.getUTCDate()+'-'+MN[t.getUTCMonth()]})]);
+  st.people.forEach(p=>aoa.push([p.team,pn(p),...wd.map(d=>codeText(d,p))]));
+  aoa.push([]);
+ }
+ const wb=XLSX.utils.book_new(),ws=XLSX.utils.aoa_to_sheet(aoa);
+ ws['!cols']=[{wch:8},{wch:16},...Array(7).fill({wch:16}),{wch:4}];
+ XLSX.utils.book_append_sheet(wb,ws,'Programación');
+ const s=stats();
+ const eq=[['Funcionario','Equipo','Total turnos',lab('M'),lab('T'),lab('N'),'Turnos en fin de semana','SESIC','Días ausente','Coberturas']];
+ st.people.forEach(p=>{const x=s[p.id];eq.push([pn(p),p.team,x.M+x.T+x.N,x.M,x.T,x.N,x.wk,x.SESIC,x.AUS,x.cov])});
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(eq),'Equidad');
+ const out=XLSX.write(wb,{type:'array',bookType:'xlsx'});
+ const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+ try{const dn=(window.claude&&window.claude.use)?await window.claude.use('downloads'):null;
+  if(dn){await dn.save({filename:'Turnos_balistica_'+days[0].date+'.xlsx',data:blob});toast('Archivo listo')}
+  else{const u=URL.createObjectURL(blob),an=document.createElement('a');an.href=u;an.download='Turnos_balistica_'+days[0].date+'.xlsx';document.body.appendChild(an);an.click();an.remove();setTimeout(()=>URL.revokeObjectURL(u),4000)}}
+ catch(e){if(!(e&&e.code==='declined'))toast('No se pudo descargar')}
+}
+function weekText(){
+ const wd=days.slice(wi*7,wi*7+7);
+ const L=['*Turnos semana '+dl(wd[0].date)+' al '+dl(wd[6].date)+'*'];
+ wd.forEach(d=>{L.push('');L.push('*'+DNL[d.i]+' '+dl(d.date)+'*');
+  SLOTS.forEach(s=>{const n=st.people.filter(p=>d.as[p.id].code===s).map(p=>p.rank+' '+p.name);L.push(sh(s)+': '+(n.join(', ')||'SIN CUBRIR'))});
+  const sc=st.people.filter(p=>d.as[p.id].code==='SESIC').map(p=>p.name);if(sc.length)L.push('SESIC: '+sc.join(', '));
+  const au=st.people.filter(p=>d.as[p.id].code==='AUS').map(p=>p.name+' ('+d.as[p.id].aus+')');if(au.length)L.push('Ausentes: '+au.join(', '))});
+ return L.join('\n');
+}
+
+async function copyText(t,okMsg){
+ try{await navigator.clipboard.writeText(t);toast(okMsg||'Copiado')}
+ catch(e){const ta=document.createElement('textarea');ta.value=t;ta.style.cssText='position:fixed;inset:20% 10%;width:80%;height:50%;z-index:70';document.body.appendChild(ta);ta.select();ta.onblur=()=>ta.remove();toast('Copia el texto con Ctrl+C')}
+}
+function ctxt(d,pid){return ctext(d.as[pid])}
+function pendientes(){
+ let old=null;try{old=JSON.parse(st.nbase||'null')}catch(e){}
+ if(!old)return{per:{},n:0};
+ const cur=JSON.parse(snapN()),t=todayISO(),A=buildFor(Object.assign({},st,old,{avisos:[]})),B=buildFor(Object.assign({},st,cur)),by={};A.forEach(d=>by[d.date]=d);
+ const per={};let n=0;
+ const lim=add(t,21);B.forEach(d=>{if(d.date<t||d.date>lim)return;const o=by[d.date];if(!o)return;
+  st.people.forEach(p=>{const q=o.as[p.id];if(!q)return;const ca=ctext(q),cb=ctext(d.as[p.id]);
+   if(ca!==cb){(per[p.id]=per[p.id]||[]).push({d:d.date,l:DN[d.i]+' '+dl(d.date)+': '+ca.replace('Ausente · ','ausente ')+' → '+cb.replace('Ausente · ','ausente '),cov:!!(d.as[p.id].ovr&&d.as[p.id].para)});n++}})});
+ return{per,n};
+}
+function msgPersona(pid,items){
+ const p=P(pid);return '*Turnos – '+pn(p)+'*\nHola '+p.name+', hay cambios en tus turnos:\n'+items.slice(0,12).map(x=>'• '+x.l).join('\n')+(items.length>12?'\n… y '+(items.length-12)+' más':'')+'\nRevisa el cuadro completo en la app.';
+}
+function weekText2(){return weekText()}
+async function doPublish(extra){
+ busy=true;
+ const est=JSON.parse(JSON.stringify(st));delete est.seg;
+ const q={accion:'guardar',usuario:CRED.u,pin:CRED.p,v:ver,estado:est,nota:(extra&&extra.nota)||'Publicó cambios en la programación'};
+ try{const r=await srv(q);busy=false;
+  if(r.error==='conflicto'){adopt(r.estado,r.v);role='admin';render();toast('Otro administrador publicó antes. Se cargó su versión; repite tus cambios.');return false}
+  if(r.error){toast('No se pudo publicar: '+r.error);return false}
+  ver=r.v;pubSnap=JSON.stringify(stripSeg());dirty=false;newer=false;render();toast('Publicado');return true}
+ catch(e){busy=false;toast('Sin conexión: tus cambios siguen aquí sin publicar');return false}
+}
+const stripSeg=()=>{const o=JSON.parse(JSON.stringify(st));delete o.seg;return o};
+function adopt(est,v){
+ st=est;st.avisos=st.avisos||[];st.cfg.short=st.cfg.short||DEF.cfg.short;st.cfg.lab=st.cfg.lab||DEF.cfg.lab;
+ seg=st.seg||null;ver=v;dirty=false;newer=false;pubSnap=JSON.stringify(stripSeg());
+ if(!st.nbase)st.nbase=snapN();days=build();goToday();
+}
+function errTxt(e){return({incorrecto:'Clave o contraseña incorrecta.',bloqueado:'Demasiados intentos. Espera 15 minutos.',sin_datos:'La aplicación aún no está instalada.',clave_instalacion:'La clave de instalación no es correcta.',ya_inicializado:'Ya está instalada.',usuario_invalido:'Usuario inválido (3 a 20 letras o números).',pass_debil:'La contraseña debe tener 8 o más caracteres.',grupo_corto:'La clave del grupo debe tener 4 o más caracteres.',usuario_ocupado:'Ese usuario ya existe.'})[e]||('Error: '+e)}
+async function loginVer(g,silent){
+ busy=true;loginErr='';render();
+ try{const r=await srv({accion:'ver',grupo:g});busy=false;
+  if(r.error){if(!silent||r.error!=='incorrecto')loginErr=errTxt(r.error);if(silent)lsSet('tb_gk','');if(r.error==='sin_datos')listo=false;render();return}
+  GK=g;lsSet('tb_gk',g);adopt(r.estado,r.v);role='viewer';tab='prog';render();poll()}
+ catch(e){busy=false;loginErr='No hay conexión con el servidor.';render()}
+}
+async function loginAdm(u,p){
+ busy=true;loginErr='';render();
+ try{const r=await srv({accion:'estado',usuario:u,pin:p});busy=false;
+  if(r.error){loginErr=errTxt(r.error);if(r.error==='sin_datos')listo=false;render();return}
+  CRED={u,p};adopt(r.estado,r.v);role='admin';tab='prog';render();poll()}
+ catch(e){busy=false;loginErr='No hay conexión con el servidor.';render()}
+}
+async function instalarSrv(set,u,p,g){
+ busy=true;loginErr='';render();
+ try{const est=JSON.parse(JSON.stringify(DEF));const r=await srv({accion:'inicializar',setup:set,usuario:u,pass:p,grupo:g,estado:est});busy=false;
+  if(r.error){loginErr=errTxt(r.error);render();return}
+  listo=true;await loginAdm(u,p)}
+ catch(e){busy=false;loginErr='No hay conexión con el servidor.';render()}
+}
+let pollT=null;
+function poll(){clearInterval(pollT);pollT=setInterval(async()=>{
+ if(role===null||document.hidden)return;
+ try{if(role==='viewer'){const r=await srv({accion:'versionVer',grupo:GK});if(r.ok&&r.v!==ver){const f=await srv({accion:'ver',grupo:GK});if(f.ok){adopt(f.estado,f.v);render();toast('Hay cambios nuevos en los turnos')}}}
+  else{const r=await srv({accion:'version',usuario:CRED.u,pin:CRED.p});if(r.ok&&r.v!==ver){if(!dirty){const f=await srv({accion:'estado',usuario:CRED.u,pin:CRED.p});if(f.ok){adopt(f.estado,f.v);render()}}else if(!newer){newer=true;render()}}}}
+ catch(e){}},60000)}
+function logout(){role=null;CRED=null;GK=null;clearInterval(pollT);lsSet('tb_gk','');loginErr='';render()}
+async function admAction(q,okMsg){
+ try{const r=await srv(Object.assign({usuario:CRED.u,pin:CRED.p},q));if(r.error){toast(errTxt(r.error));return false}
+  const f=await srv({accion:'estado',usuario:CRED.u,pin:CRED.p});if(f.ok){const keep=dirty?stripSeg():null;const d0=dirty;adopt(f.estado,f.v);if(keep){st=Object.assign(keep,{seg:f.estado.seg});days=build();dirty=d0;}}
+  render();toast(okMsg);return true}
+ catch(e){toast('Sin conexión');return false}
+}
+const val=id=>{const e=document.getElementById(id);return e?e.value.trim():''};
+function NEWACT(x,a,e){
+ if(a==='lm'){loginMode=x.m;loginErr='';render();return true}
+ if(a==='login-ver'){loginVer(val('l-g'));return true}
+ if(a==='login-adm'){loginAdm(val('l-u'),document.getElementById('l-p').value);return true}
+ if(a==='login-ins'){instalarSrv(val('i-s'),val('i-u'),document.getElementById('i-p').value,val('i-g'));return true}
+ if(a==='logout'){logout();return true}
+ if(a==='copy'){copyText(weekText(),'Semana copiada');return true}
+ if(a==='xlsx'){exportXlsx();return true}
+ if(a==='pub'){doPublish();return true}
+ if(a==='pcopy'){const pd_=pendientes();copyText(msgPersona(x.p,pd_.per[x.p]||[]),'Mensaje copiado');return true}
+ if(a==='pcopyall'){const pd_=pendientes();copyText(Object.keys(pd_.per).map(id=>msgPersona(id,pd_.per[id])).join('\n\n'),'Mensajes copiados');return true}
+ if(a==='pnotif'){const pd_=pendientes(),ids=Object.keys(pd_.per);if(!ids.length)return true;
+   const tx='*Cambios en la programación de turnos*\n'+ids.map(id=>'• '+pn(P(id))+'\n'+pd_.per[id].slice(0,10).map(z=>'   '+z.l).join('\n')).join('\n');
+   st.avisos.unshift({id:Date.now(),t:new Date().toISOString(),titulo:'Cambios en la programación',texto:tx,pids:ids,por:(seg&&seg.yo)||'Admin'});
+   st.nbase=snapN();if(SERVER){dirty=true;doPublish({nota:'Notificó cambios de turnos a '+ids.length+' funcionario(s)'})}else{save();render();toast('Aviso publicado')}return true}
+ if(a==='pmark'){st.nbase=snapN();save();render();toast('Marcado como notificado');return true}
+ if(a==='avto'){if(avTo.has(x.p))avTo.delete(x.p);else avTo.add(x.p);const k=document.getElementById('av-t'),m=document.getElementById('av-x');const kv=k?k.value:'',mv=m?m.value:'';render();const k2=document.getElementById('av-t'),m2=document.getElementById('av-x');if(k2)k2.value=kv;if(m2)m2.value=mv;return true}
+ if(a==='avall'){avTo.clear();const k=document.getElementById('av-t'),m=document.getElementById('av-x');const kv=k?k.value:'',mv=m?m.value:'';render();document.getElementById('av-t').value=kv;document.getElementById('av-x').value=mv;return true}
+ if(a==='solve'){applyCover(x.d,x.p,x.s,x.l);rebuild();render();toast(pn(P(x.p))+' cubre el '+sh(x.s)+' del '+dl(x.d)+'. Queda por notificar en Avisos');return true}
+ if(a==='avpub'){
+   const ti=val('av-t')||'Aviso',tx=document.getElementById('av-x').value.trim();if(!tx){toast('Escribe el mensaje');return true}
+   st.avisos.unshift({id:Date.now(),t:new Date().toISOString(),titulo:ti,texto:tx,pids:[...avTo],por:(seg&&seg.yo)||'Admin'});avTo.clear();
+   if(SERVER){dirty=true;doPublish({nota:'Publicó el aviso “'+ti+'”'})}else{save();render();toast('Aviso publicado')}return true}
+ if(a==='avwa'){const t=val('av-t'),x=document.getElementById('av-x').value.trim();if(!x){toast('Escribe el mensaje');return true}copyText((t?'*'+t+'*\n':'')+x,'Copiado para WhatsApp');return true}
+ if(a==='avweek'){const ta=document.getElementById('av-x');ta.value=weekText();if(!val('av-t'))document.getElementById('av-t').value='Turnos de la semana';return true}
+ if(a==='avcopy'){const v=st.avisos.find(z=>String(z.id)===x.id);if(v)copyText('*'+(v.titulo||'Aviso')+'*\n'+v.texto,'Copiado para WhatsApp');return true}
+ if(a==='avdel'){st.avisos=st.avisos.filter(z=>String(z.id)!==x.id);save();render();return true}
+ if(a==='gsave'){const g=val('g-new');if(g.length<4){toast('Mínimo 4 caracteres');return true}
+   (async()=>{const est=stripSeg();const r=await srv({accion:'guardar',usuario:CRED.u,pin:CRED.p,v:ver,estado:est,grupoNuevo:g,nota:'Cambió la clave del grupo'});
+     if(r.error){toast(errTxt(r.error));return}ver=r.v;await admAction({accion:'version'},'Clave del grupo cambiada')})();return true}
+ if(a==='ginv'){copyText('Programación de turnos de balística\n'+location.href.split('#')[0]+'\nEntra con “Ver turnos” y esta clave: '+seg.grupo,'Invitación copiada');return true}
+ if(a==='a2save'){admAction({accion:'crearAdmin',nuevoUsuario:val('a2-u'),nuevaPass:document.getElementById('a2-p').value},'Administrador guardado');return true}
+ if(a==='a2del'){admAction({accion:'quitarAdmin'},'Administrador quitado');return true}
+ if(a==='mypass'){const np=document.getElementById('my-p').value;(async()=>{const ok=await admAction({accion:'cambiarPass',nuevaPass:np},'Contraseña cambiada');if(ok)CRED.p=np})();return true}
+ return false;
+}
+function boot(){
+ if(!SERVER){if(!st.nbase)st.nbase=snapN();render();return}
+ srv({accion:'info'}).then(r=>{listo=!!r.listo;const g=lsGet('tb_gk');if(g&&listo)loginVer(g,true);else render()}).catch(()=>{loginErr='No hay conexión con el servidor.';render()});
+ render();
+}
+boot();
+})();
+</script>
+</html>
