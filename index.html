@@ -194,7 +194,7 @@ const effW=()=>{const c=st.cfg,s0=monday(c.start);return Math.max(c.weeks,Math.m
 function* perms(a,k=0){if(k>=a.length-1){yield a.slice();return}for(let i=k;i<a.length;i++){[a[k],a[i]]=[a[i],a[k]];yield* perms(a,k+1);[a[k],a[i]]=[a[i],a[k]]}}
 function build(){
  const cfg=st.cfg,start=monday(cfg.start),days=[];
- const prev={},cnt={},sc={},ls={};
+ const prev={},cnt={},sc={},ls={},hold={};let restMon=new Set();
  st.people.forEach(p=>{prev[p.id]=null;cnt[p.id]={M:0,T:0,N:0};sc[p.id]=0;ls[p.id]=-1});
  const am={};st.abs.forEach(a=>{for(let t=pd(a.from);t<=pd(a.to);t+=D)am[a.pid+'|'+fd(t)]=a.type});
  const nx={M:'T',T:'N',N:'M'};let gi=0;
@@ -210,20 +210,27 @@ function build(){
    st.people.filter(p=>p.tipo==='fijo').forEach(p=>{
      if(we&&!p.fijoFinde)as[p.id]={plan:'FINDE'};else{as[p.id]={plan:p.fijoCode};if(!(isA(p)&&wa[p.id]>=cfg.umbral))fixCov[p.fijoCode]++}});
    const rota=st.people.filter(p=>p.tipo==='rota');
-   let pool,req=SLOTS.filter(s=>we||!fixCov[s]);
+   let pool,req=SLOTS.slice();
    if(we){pool=rota.filter(p=>p.team===wkTeam&&inPool(p));rota.filter(p=>p.team!==wkTeam).forEach(p=>as[p.id]={plan:'FINDE'})}
-   else pool=rota.filter(inPool);
+   else{pool=rota.filter(inPool);if(i===0)pool=pool.filter(p=>{if(restMon.has(p.id)){as[p.id]={plan:'FINDE'};return false}return true})}
    let sn=0;
-   if(!we){sn=Math.min(cfg.sesic,Math.max(0,pool.length-req.length));
+   if(!we){sn=Math.max(0,pool.length-req.length);
      const c=pool.slice().sort((a,b)=>sc[a.id]-sc[b.id]||ls[a.id]-ls[b.id]||a.id.localeCompare(b.id));
      c.slice(0,sn).forEach(p=>{as[p.id]={plan:'SESIC'};sc[p.id]++;ls[p.id]=gi});}
-   const wk2=pool.filter(p=>!as[p.id]);
-   const base=['N','M','T'].filter(s=>req.includes(s));
+   let wk2=pool.filter(p=>!as[p.id]);
+   const base=(we||fixCov.N?['M','T','N']:['N','M','T']).filter(s=>req.includes(s));
+   if(we){let free=base.slice(0,wk2.length);const keepers=[];wk2.forEach(p=>{const h=hold[p.id];if(h&&!isA(p)&&free.includes(h)&&p.can[h]){free.splice(free.indexOf(h),1);as[p.id]={plan:h};prev[p.id]=h;cnt[p.id][h]++;keepers.push(p.id)}});wk2=wk2.filter(p=>!keepers.includes(p.id));
+     if(wk2.length){const seats0=free.slice(0,wk2.length);let b0=null,c0=1e9;const cs=(p,s)=>{const pv=prev[p.id];let c=pv==null?0:(s===nx[pv]?0:s===pv?1.2:2);c+=cnt[p.id][s]*0.3;if(!p.can[s])c+=100;return c};
+       for(const pr of perms(seats0.slice())){let c=0;for(let k=0;k<wk2.length;k++)c+=cs(wk2[k],pr[k]);if(c<c0){c0=c;b0=pr.slice()}}
+       wk2.forEach((p,k)=>{as[p.id]={plan:b0[k]};prev[p.id]=b0[k];cnt[p.id][b0[k]]++});wk2=[]}}
    const seats=wk2.length<=base.length?base.slice(0,wk2.length):base.concat(Array.from({length:wk2.length-base.length},(_,k)=>['N','M','T'][k%3]));
    const cost=(p,s)=>{const pv=prev[p.id];let c=pv==null?0:(s===nx[pv]?0:s===pv?1.2:2);c+=cnt[p.id][s]*0.3;if(!p.can[s])c+=100;return c};
    let best=null,bc=1e9;
-   if(wk2.length){for(const pr of perms(seats.slice())){let c=0;for(let k=0;k<wk2.length;k++)c+=cost(wk2[k],pr[k]);if(c<bc){bc=c;best=pr.slice()}}
+   if(wk2.length&&!we){for(const pr of perms(seats.slice())){let c=0;for(let k=0;k<wk2.length;k++)c+=cost(wk2[k],pr[k]);if(c<bc){bc=c;best=pr.slice()}}
      wk2.forEach((p,k)=>{as[p.id]={plan:best[k]};prev[p.id]=best[k];cnt[p.id][best[k]]++})}
+   if(i===6){restMon=new Set();st.people.forEach(p=>{const a=as[p.id];if(a&&p.tipo==='rota'&&SLOTS.includes(a.plan)&&!isA(p))restMon.add(p.id)})}
+   if(i===4)Object.keys(hold).forEach(k=>delete hold[k]);
+   if(i===4||i===5)st.people.forEach(p=>{const a=as[p.id];if(a&&SLOTS.includes(a.plan)&&p.tipo==='rota'&&(i===4?p.team===wkTeam:true))hold[p.id]=a.plan});
    st.people.forEach(p=>{
      if(!as[p.id])as[p.id]={plan:'SESIC'};
      const a=as[p.id];a.code=a.plan;
@@ -400,10 +407,9 @@ function vCfg(){
   <label>el fin de semana trabaja<select id="c-team"><option ${c.anchorTeam==='A'?'selected':''}>A</option><option ${c.anchorTeam==='B'?'selected':''}>B</option></select></label>
  </div><div class="hint" style="margin-top:8px">Los equipos se alternan cada semana. Con tu Excel, el fin de semana del 31 oct–1 nov trabaja el A y el del 7–8 nov, el B.</div></div>
  <div class="panel"><h2>Reglas</h2><div class="form">
-  <label>Personas en tareas SESIC por día (L–V)<input type="number" id="c-sesic" min="0" max="4" value="${c.sesic}"></label>
   <label>Ausencia que saca de la rotación (días en la semana)<input type="number" id="c-umbral" min="1" max="7" value="${c.umbral}"></label>
  </div><div class="form" style="margin-top:8px">${SLOTS.map(s=>`<label>Texto del turno ${sh(s)} (Excel)<input data-lab="${s}" value="${esc(c.lab[s])}"></label>`).join('')}</div>
- <div class="hint" style="margin-top:8px">Cada día debe haber al menos una persona en ${sh('M')}, ${sh('T')} y ${sh('N')}. Si sobra gente, se suma a 2y3 o a los otros turnos.</div>
+ <div class="hint" style="margin-top:8px">Cada día debe haber al menos una persona en ${sh('M')}, ${sh('T')} y ${sh('N')}. Quien sobra pasa a tareas SESIC entre semana. En fin de semana, quien trabaja conserva el mismo turno de viernes a domingo.</div>
  <div class="row" style="margin-top:10px"><button class="btn" data-act="reset">Volver a los datos de ejemplo</button></div></div>
  </div>`;
 }
@@ -529,7 +535,7 @@ document.addEventListener('change',e=>{
   if(f==='tipo'&&!p.fijoCode)p.fijoCode='N';
   rebuild();if(f==='tipo')render();return}
  if(t.dataset.lab){st.cfg.lab[t.dataset.lab]=t.value;save();return}
- const map={'c-start':v=>st.cfg.start=v,'c-weeks':v=>st.cfg.weeks=+v,'c-anchor':v=>st.cfg.anchor=v,'c-team':v=>st.cfg.anchorTeam=v,'c-sesic':v=>st.cfg.sesic=Math.max(0,+v),'c-umbral':v=>st.cfg.umbral=Math.max(1,+v)};
+ const map={'c-start':v=>st.cfg.start=v,'c-weeks':v=>st.cfg.weeks=+v,'c-anchor':v=>st.cfg.anchor=v,'c-team':v=>st.cfg.anchorTeam=v,'c-umbral':v=>st.cfg.umbral=Math.max(1,+v)};
  if(map[t.id]&&t.value){map[t.id](t.value);wi=0;rebuild();render()}
 });
 
